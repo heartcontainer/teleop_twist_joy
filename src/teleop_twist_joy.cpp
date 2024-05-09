@@ -59,6 +59,7 @@ struct TeleopTwistJoy::Impl
   bool require_enable_button;
   int64_t enable_button;
   int64_t enable_turbo_button;
+  int64_t enable_x_button;
 
   std::map<std::string, int64_t> axis_linear_map;
   std::map<std::string, std::map<std::string, double>> scale_linear_map;
@@ -85,6 +86,8 @@ TeleopTwistJoy::TeleopTwistJoy(const rclcpp::NodeOptions& options) : Node("teleo
   pimpl_->enable_button = this->declare_parameter("enable_button", 5);
 
   pimpl_->enable_turbo_button = this->declare_parameter("enable_turbo_button", -1);
+
+  pimpl_->enable_x_button = this->declare_parameter("enable_x_button", -1);
 
   std::map<std::string, int64_t> default_linear_map{
     {"x", 5L},
@@ -117,6 +120,14 @@ TeleopTwistJoy::TeleopTwistJoy(const rclcpp::NodeOptions& options) : Node("teleo
   };
   this->declare_parameters("scale_linear_turbo", default_scale_linear_turbo_map);
   this->get_parameters("scale_linear_turbo", pimpl_->scale_linear_map["turbo"]);
+
+  std::map<std::string, double> default_scale_linear_turbo_x_map{
+    {"x", 1.0},
+    {"y", 0.0},
+    {"z", 0.0},
+  };
+  this->declare_parameters("scale_linear_turbo_x", default_scale_linear_turbo_x_map);
+  this->get_parameters("scale_linear_turbo_x", pimpl_->scale_linear_map["turbo_x"]);
 
   std::map<std::string, double> default_scale_angular_normal_map{
     {"yaw", 0.5},
@@ -295,6 +306,18 @@ TeleopTwistJoy::TeleopTwistJoy(const rclcpp::NodeOptions& options) : Node("teleo
       {
         this->pimpl_->scale_angular_map["normal"]["roll"] = parameter.get_value<rclcpp::PARAMETER_DOUBLE>();
       }
+      else if (parameter.get_name() == "scale_linear_turbo_x.x")
+      {
+        this->pimpl_->scale_linear_map["turbo_x"]["x"] = parameter.get_value<rclcpp::PARAMETER_DOUBLE>();
+      }
+      else if (parameter.get_name() == "scale_linear_turbo_x.y")
+      {
+        this->pimpl_->scale_linear_map["turbo_x"]["y"] = parameter.get_value<rclcpp::PARAMETER_DOUBLE>();
+      }
+      else if (parameter.get_name() == "scale_linear_turbo_x.z")
+      {
+        this->pimpl_->scale_linear_map["turbo_x"]["z"] = parameter.get_value<rclcpp::PARAMETER_DOUBLE>();
+      }
     }
     return result;
   };
@@ -338,22 +361,26 @@ void TeleopTwistJoy::Impl::sendCmdVelMsg(const sensor_msgs::msg::Joy::SharedPtr 
   sent_disable_msg = false;
 }
 
+static bool is_btn_enabled(const sensor_msgs::msg::Joy::SharedPtr joy_msg, int64_t button)
+{
+  if (button >= 0 &&
+      joy_msg->buttons.size() > button &&
+      joy_msg->buttons[button]) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
 void TeleopTwistJoy::Impl::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy_msg)
 {
-  if (enable_turbo_button >= 0 &&
-      static_cast<int>(joy_msg->buttons.size()) > enable_turbo_button &&
-      joy_msg->buttons[enable_turbo_button])
-  {
+  if (is_btn_enabled(joy_msg, enable_x_button) && is_btn_enabled(joy_msg, enable_turbo_button)) {
+    sendCmdVelMsg(joy_msg, "turbo_x");
+  } else if (is_btn_enabled(joy_msg, enable_turbo_button)) {
     sendCmdVelMsg(joy_msg, "turbo");
-  }
-  else if (!require_enable_button ||
-	   (static_cast<int>(joy_msg->buttons.size()) > enable_button &&
-           joy_msg->buttons[enable_button]))
-  {
+  } else if (is_btn_enabled(joy_msg, enable_button)) {
     sendCmdVelMsg(joy_msg, "normal");
-  }
-  else
-  {
+  } else {
     // When enable button is released, immediately send a single no-motion command
     // in order to stop the robot.
     if (!sent_disable_msg)
