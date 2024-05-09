@@ -7,7 +7,7 @@ Simple joystick teleop for twist robots. See [ROS Wiki](http://wiki.ros.org/tele
 ```
 mkdir -p ~/ros_ws/src
 cd ~/ros_ws/src
-git clone git@github.com:heartcontainer/teleop_twist_joy.git -b logitech_f710
+git clone git@github.com:heartcontainer/teleop_twist_joy.git -b ros_noetic
 cd ~/ros_ws
 catkin_make
 ```
